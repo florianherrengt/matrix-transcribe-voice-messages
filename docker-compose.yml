@@ -4,8 +4,6 @@ services:
     env_file: .env
     volumes:
       - store:/app/store
-    extra_hosts:
-      - "oxygen:host-gateway"
     restart: unless-stopped
 
 volumes:
