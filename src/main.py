@@ -58,9 +58,8 @@ async def main():
 
     await client.sync(timeout=30000, full_state=True)
 
-    if client.should_upload_keys:
-        await client.keys_upload()
-        logger.info("E2EE keys uploaded")
+    await client.keys_upload()
+    logger.info("E2EE keys uploaded")
 
     if client.should_query_keys:
         await client.keys_query()
