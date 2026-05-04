@@ -4,7 +4,7 @@ import signal
 import sys
 
 from dotenv import load_dotenv
-from nio import AsyncClient, LoginResponse, RoomMessageAudio, RoomMessageText
+from nio import AsyncClient, AsyncClientConfig, InviteEvent, LoginResponse, RoomEncryptedAudio, RoomMessageAudio, RoomMessageText
 
 from src.config import Config
 from src.matrix_client import MatrixTranscribeBot
@@ -27,7 +27,8 @@ async def main():
     client = AsyncClient(
         config.homeserver,
         config.user_id,
-        store_sync_tokens=True,
+        store_path=config.store_path,
+        config=AsyncClientConfig(store_sync_tokens=True, encryption_enabled=True),
     )
 
     if config.device_id:
@@ -43,18 +44,32 @@ async def main():
         config.user_id,
         client.device_id,
     )
+    logger.info("Device key fingerprint: %s", client.olm.account.identity_keys["ed25519"])
 
     bot = MatrixTranscribeBot(client, transcriber)
 
-    client.add_event_callback(bot.handle_room_message, (RoomMessageAudio, RoomMessageText))
+    async def auto_join(room, event):
+        logger.info("Auto-joining room %s", room.room_id)
+        await client.join(room.room_id)
 
-    await client.sync(timeout=30000)
+    client.add_event_callback(auto_join, InviteEvent)
+    client.add_event_callback(bot.handle_room_message, (RoomMessageAudio, RoomMessageText, RoomEncryptedAudio))
 
-    if config.store_path:
-        client.store_path = config.store_path
-        await client.olm_create_account()
+    await client.sync(timeout=30000, full_state=True)
+
+    if client.should_upload_keys:
         await client.keys_upload()
         logger.info("E2EE keys uploaded")
+
+    if client.should_query_keys:
+        await client.keys_query()
+        logger.info("E2EE keys queried")
+
+    for user_id in client.device_store.users:
+        for device in client.device_store.active_user_devices(user_id):
+            if not device.verified:
+                client.verify_device(device)
+                logger.info("Trusted device %s for %s", device.id, user_id)
 
     stop_event = asyncio.Event()
 
