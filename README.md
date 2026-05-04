@@ -2,7 +2,8 @@
   <img src="https://upload.wikimedia.org/wikipedia/commons/7/7c/Matrix_icon.svg" alt="Matrix" width="80" height="80">
   <h1 align="center">Matrix Voice Transcriber</h1>
   <p align="center">
-    Automatically transcribe voice messages in your Matrix rooms — <strong>including E2EE rooms</strong>
+    Automatically transcribe voice messages in your Matrix rooms — <strong>including E2EE rooms</strong><br>
+    Works with any OpenAI Whisper-compatible API (Parakeet, whisper.cpp, OpenAI, etc.)
   </p>
 </p>
 
@@ -15,7 +16,7 @@
 
 ---
 
-Voice messages are great for the sender, but terrible for everyone else — especially in group chats. This bot listens for voice messages in your Matrix rooms, transcribes them using [Parakeet](https://github.com/achetronic/parakeet) (a Whisper-compatible ASR server), and replies with the text. Fully compatible with **end-to-end encrypted rooms**.
+Voice messages are great for the sender, but terrible for everyone else — especially in group chats. This bot listens for voice messages in your Matrix rooms, transcribes them using any Whisper-compatible ASR server, and replies with the text. Fully compatible with **end-to-end encrypted rooms**.
 
 ## Features
 
@@ -69,7 +70,7 @@ Invite `@transcribe:your-homeserver.com` to any room. The bot will auto-join and
 
 ## Whisper / ASR Server
 
-This bot is designed to work with any [OpenAI Whisper-compatible API](https://platform.openai.com/docs/api-reference/audio/createTranscription). We recommend:
+This bot works with **any OpenAI Whisper-compatible API**. Just point `PARAKEET_URL` at your server:
 
 - **[Parakeet](https://github.com/achetronic/parakeet)** — Fast, CPU-only, Whisper-compatible server using NVIDIA Parakeet TDT 0.6B (what this project was tested with)
 - **[whisper.cpp](https://github.com/ggerganov/whisper.cpp)** — C++ Whisper implementation with a compatible server
