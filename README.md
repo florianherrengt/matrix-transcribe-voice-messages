@@ -16,7 +16,7 @@
 
 ---
 
-Voice messages are great for the sender, but terrible for everyone else — especially in group chats. This bot listens for voice messages in your Matrix rooms, transcribes them using any Whisper-compatible ASR server, and replies with the text. Fully compatible with **end-to-end encrypted rooms**.
+This bot listens for voice messages in your Matrix rooms, transcribes them using any Whisper-compatible ASR server, and replies with the text. Fully compatible with **end-to-end encrypted rooms**.
 
 ## Features
 
@@ -78,14 +78,14 @@ This bot works with **any OpenAI Whisper-compatible API**. Just point `PARAKEET_
 
 ## Configuration
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `MATRIX_HOMESERVER` | Yes | — | Your Matrix homeserver URL |
-| `MATRIX_USER_ID` | Yes | — | Bot's Matrix user ID |
-| `MATRIX_PASSWORD` | Yes | — | Bot's password |
-| `MATRIX_DEVICE_ID` | No | Auto | Device ID for session persistence |
-| `PARAKEET_URL` | Yes | — | Whisper-compatible API base URL |
-| `STORE_PATH` | No | `./store` | Path for E2EE key storage |
+| Variable            | Required | Default   | Description                       |
+| ------------------- | -------- | --------- | --------------------------------- |
+| `MATRIX_HOMESERVER` | Yes      | —         | Your Matrix homeserver URL        |
+| `MATRIX_USER_ID`    | Yes      | —         | Bot's Matrix user ID              |
+| `MATRIX_PASSWORD`   | Yes      | —         | Bot's password                    |
+| `MATRIX_DEVICE_ID`  | No       | Auto      | Device ID for session persistence |
+| `PARAKEET_URL`      | Yes      | —         | Whisper-compatible API base URL   |
+| `STORE_PATH`        | No       | `./store` | Path for E2EE key storage         |
 
 ## How It Works
 
