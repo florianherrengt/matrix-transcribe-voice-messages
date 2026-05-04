@@ -2,6 +2,7 @@ import logging
 from typing import Any, TYPE_CHECKING
 
 from nio import DownloadError, RoomEncryptedAudio
+from nio.exceptions import OlmUnverifiedDeviceError
 
 if TYPE_CHECKING:
     from nio import AsyncClient, MatrixRoom
@@ -29,6 +30,13 @@ class MatrixTranscribeBot:
         self.client = client
         self.transcriber = transcriber
 
+    async def _trust_all_devices(self) -> None:
+        for user_id in self.client.device_store.users:
+            for device in self.client.device_store.active_user_devices(user_id):
+                if not device.verified:
+                    self.client.verify_device(device)
+                    logger.info("Trusted device %s for %s", device.id, user_id)
+
     async def handle_room_message(self, room: "MatrixRoom", event) -> None:
         logger.info("Received message in %s from %s, type=%s", room.room_id, event.sender, type(event).__name__)
 
@@ -54,7 +62,10 @@ class MatrixTranscribeBot:
             await self._send_reply(room.room_id, f"Transcription:\n{text}", event.event_id)
         except Exception as e:
             logger.error("Failed to transcribe audio: %s", e)
-            await self._send_reply(room.room_id, f"Failed to transcribe audio: {e}", event.event_id)
+            try:
+                await self._send_reply(room.room_id, f"Failed to transcribe audio: {e}", event.event_id)
+            except Exception:
+                logger.exception("Failed to send error reply")
 
     async def _download_audio(self, event) -> bytes:
         url = event.url
@@ -89,8 +100,17 @@ class MatrixTranscribeBot:
                 }
             },
         }
-        await self.client.room_send(
-            room_id,
-            "m.room.message",
-            content,
-        )
+        try:
+            await self.client.room_send(
+                room_id,
+                "m.room.message",
+                content,
+            )
+        except OlmUnverifiedDeviceError:
+            logger.info("Unverified devices found, trusting all devices and retrying")
+            await self._trust_all_devices()
+            await self.client.room_send(
+                room_id,
+                "m.room.message",
+                content,
+            )

@@ -69,7 +69,7 @@ async def main():
         for device in client.device_store.active_user_devices(user_id):
             if not device.verified:
                 client.verify_device(device)
-                logger.info("Trusted device %s for %s", device.id, user_id)
+                logger.info("Trusted device %s for %s (startup)", device.id, user_id)
 
     stop_event = asyncio.Event()
 
