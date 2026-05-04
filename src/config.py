@@ -10,6 +10,7 @@ class Config:
     parakeet_url: str
     device_id: str | None
     store_path: str
+    recovery_key: str | None
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -34,4 +35,5 @@ class Config:
             parakeet_url=os.environ["PARAKEET_URL"],
             device_id=os.environ.get("MATRIX_DEVICE_ID"),
             store_path=os.environ.get("STORE_PATH", "./store"),
+            recovery_key=os.environ.get("MATRIX_RECOVERY_KEY"),
         )

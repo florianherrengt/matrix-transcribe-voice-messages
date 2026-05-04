@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from nio import AsyncClient, AsyncClientConfig, InviteEvent, LoginResponse, RoomEncryptedAudio, RoomMessageAudio, RoomMessageText
 
 from src.config import Config
+from src.cross_sign import setup_cross_signing
 from src.matrix_client import MatrixTranscribeBot
 from src.transcriber import Transcriber
 
@@ -64,6 +65,12 @@ async def main():
     if client.should_query_keys:
         await client.keys_query()
         logger.info("E2EE keys queried")
+
+    if config.recovery_key:
+        try:
+            await setup_cross_signing(client, config.recovery_key)
+        except Exception:
+            logger.exception("Cross-signing failed")
 
     for user_id in client.device_store.users:
         for device in client.device_store.active_user_devices(user_id):
