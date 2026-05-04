@@ -8,7 +8,7 @@ def test_config_loads_from_env(monkeypatch):
     monkeypatch.setenv("MATRIX_HOMESERVER", "https://matrix.example.com")
     monkeypatch.setenv("MATRIX_USER_ID", "@bot:example.com")
     monkeypatch.setenv("MATRIX_PASSWORD", "secret123")
-    monkeypatch.setenv("PARAKEET_URL", "http://oxygen:5092")
+    monkeypatch.setenv("PARAKEET_URL", "http://localhost:5092")
     monkeypatch.delenv("MATRIX_DEVICE_ID", raising=False)
     monkeypatch.delenv("STORE_PATH", raising=False)
 
@@ -18,7 +18,7 @@ def test_config_loads_from_env(monkeypatch):
     assert config.user_id == "@bot:example.com"
     assert config.password == "secret123"
     assert config.device_id is None
-    assert config.parakeet_url == "http://oxygen:5092"
+    assert config.parakeet_url == "http://localhost:5092"
     assert config.store_path == "./store"
 
 
@@ -26,7 +26,7 @@ def test_config_with_optional_fields(monkeypatch):
     monkeypatch.setenv("MATRIX_HOMESERVER", "https://matrix.example.com")
     monkeypatch.setenv("MATRIX_USER_ID", "@bot:example.com")
     monkeypatch.setenv("MATRIX_PASSWORD", "secret123")
-    monkeypatch.setenv("PARAKEET_URL", "http://oxygen:5092")
+    monkeypatch.setenv("PARAKEET_URL", "http://localhost:5092")
     monkeypatch.setenv("MATRIX_DEVICE_ID", "DEVICEXYZ")
     monkeypatch.setenv("STORE_PATH", "/data/store")
 

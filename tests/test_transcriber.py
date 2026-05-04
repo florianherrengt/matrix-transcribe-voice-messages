@@ -6,14 +6,14 @@ from src.transcriber import Transcriber
 
 @pytest.fixture
 def transcriber():
-    return Transcriber("http://oxygen:5092")
+    return Transcriber("http://localhost:5092")
 
 
 @pytest.mark.asyncio
 async def test_transcribe_success(transcriber):
     with aioresponses() as m:
         m.post(
-            "http://oxygen:5092/v1/audio/transcriptions",
+            "http://localhost:5092/v1/audio/transcriptions",
             payload={"text": "Hello world"},
         )
 
@@ -26,7 +26,7 @@ async def test_transcribe_success(transcriber):
 async def test_transcribe_server_error(transcriber):
     with aioresponses() as m:
         m.post(
-            "http://oxygen:5092/v1/audio/transcriptions",
+            "http://localhost:5092/v1/audio/transcriptions",
             status=500,
         )
 
@@ -38,7 +38,7 @@ async def test_transcribe_server_error(transcriber):
 async def test_transcribe_connection_error(transcriber):
     with aioresponses() as m:
         m.post(
-            "http://oxygen:5092/v1/audio/transcriptions",
+            "http://localhost:5092/v1/audio/transcriptions",
             exception=ConnectionError("Connection refused"),
         )
 
