@@ -1,116 +1,75 @@
 import logging
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
-from nio import DownloadError, RoomEncryptedAudio
-from nio.exceptions import OlmUnverifiedDeviceError
+from mautrix.types import (
+    MediaMessageEventContent,
+    MessageEvent,
+    MessageType,
+    RelatesTo,
+)
 
 if TYPE_CHECKING:
-    from nio import AsyncClient, MatrixRoom
+    from mautrix.client import Client
 
 from src.transcriber import Transcriber
 
 logger = logging.getLogger(__name__)
 
 
-def is_voice_message(event) -> bool:
-    source = event.source.get("content", {})
-    msgtype = source.get("msgtype", "")
-
-    if msgtype == "m.audio":
+def is_voice_message(content: MediaMessageEventContent) -> bool:
+    if content.msgtype == MessageType.AUDIO:
         return True
-
-    if msgtype == "m.text" and "m.voice" in source:
+    raw = content.serialize()
+    if raw.get("msgtype") == "m.text" and "m.voice" in raw:
         return True
-
     return False
 
 
 class MatrixTranscribeBot:
-    def __init__(self, client: "AsyncClient", transcriber: Transcriber):
+    def __init__(self, client: "Client", transcriber: Transcriber):
         self.client = client
         self.transcriber = transcriber
 
-    async def _trust_all_devices(self) -> None:
-        for user_id in self.client.device_store.users:
-            for device in self.client.device_store.active_user_devices(user_id):
-                if not device.verified:
-                    self.client.verify_device(device)
-                    logger.info("Trusted device %s for %s", device.id, user_id)
-
-    async def handle_room_message(self, room: "MatrixRoom", event) -> None:
-        logger.info("Received message in %s from %s, type=%s", room.room_id, event.sender, type(event).__name__)
-
-        if event.sender == self.client.user_id:
+    async def handle_message(self, event: MessageEvent) -> None:
+        if event.sender == self.client.mxid:
             return
 
-        if not is_voice_message(event):
+        content = event.content
+        if not isinstance(content, MediaMessageEventContent):
             return
 
-        logger.info("Voice message detected! Event ID: %s", event.event_id)
+        if not is_voice_message(content):
+            return
+
+        logger.info("Voice message detected in %s from %s", event.room_id, event.sender)
+
+        mxc_url = content.url
+        if not mxc_url:
+            logger.warning("No URL in voice message content")
+            return
 
         try:
-            audio_data = await self._download_audio(event)
+            audio_data = await self.client.download_media(mxc_url)
         except Exception as e:
             logger.error("Failed to download audio: %s", e)
-            await self._send_reply(room.room_id, f"Failed to download audio: {e}", event.event_id)
+            await self._send_reply(event.room_id, f"Failed to download audio: {e}", event.event_id)
             return
 
-        filename = getattr(event, "body", "audio.ogg")
+        filename = content.body or "audio.ogg"
 
         try:
             text = await self.transcriber.transcribe(audio_data, filename)
-            await self._send_reply(room.room_id, f"Transcription:\n{text}", event.event_id)
+            await self._send_reply(event.room_id, f"Transcription:\n{text}", event.event_id)
         except Exception as e:
             logger.error("Failed to transcribe audio: %s", e)
             try:
-                await self._send_reply(room.room_id, f"Failed to transcribe audio: {e}", event.event_id)
+                await self._send_reply(event.room_id, f"Failed to transcribe audio: {e}", event.event_id)
             except Exception:
                 logger.exception("Failed to send error reply")
 
-    async def _download_audio(self, event) -> bytes:
-        url = event.url
-        logger.info("Downloading audio from URL: %s", url)
-
-        response = await self.client.download(mxc=url)
-
-        if isinstance(response, DownloadError):
-            raise Exception(f"Download failed: {response}")
-
-        data = response.body
-
-        if isinstance(event, RoomEncryptedAudio):
-            from nio.crypto import decrypt_attachment
-
-            data = decrypt_attachment(
-                data,
-                event.key["k"],
-                event.hashes["sha256"],
-                event.iv,
-            )
-
-        return data
-
     async def _send_reply(self, room_id: str, text: str, reply_to_event_id: str) -> None:
-        content = {
-            "msgtype": "m.text",
-            "body": text,
-            "m.relates_to": {
-                "m.in_reply_to": {
-                    "event_id": reply_to_event_id,
-                }
-            },
-        }
-        try:
-            await self.client.room_send(
-                room_id,
-                "m.room.message",
-                content,
-            )
-        except OlmUnverifiedDeviceError:
-            logger.info("Unverified devices found, trusting all devices and retrying")
-            await self._trust_all_devices()
-            await self.client.room_send(
-                room_id,
-                "m.room.message",
-                content,
-            )
+        await self.client.send_text(
+            room_id,
+            text=text,
+            relates_to=RelatesTo(in_reply_to={"event_id": reply_to_event_id}),
+        )

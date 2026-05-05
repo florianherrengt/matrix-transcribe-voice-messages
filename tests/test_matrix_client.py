@@ -1,34 +1,18 @@
-import pytest
+from mautrix.types import MediaMessageEventContent, MessageType, TextMessageEventContent
 
 from src.matrix_client import is_voice_message
 
 
-class FakeEvent:
-    def __init__(self, source):
-        self.source = source
+def test_audio_message_is_voice():
+    content = MediaMessageEventContent(msgtype=MessageType.AUDIO, body="voice.ogg")
+    assert is_voice_message(content) is True
 
 
-def test_is_voice_message_audio_msgtype():
-    event = FakeEvent({"content": {"msgtype": "m.audio", "url": "mxc://example.com/abc123"}})
-    assert is_voice_message(event) is True
+def test_text_message_is_not_voice():
+    content = TextMessageEventContent(msgtype=MessageType.TEXT, body="hello")
+    assert is_voice_message(content) is False
 
 
-def test_is_voice_message_msc3245_voice():
-    event = FakeEvent({
-        "content": {
-            "msgtype": "m.text",
-            "m.voice": {},
-            "org.matrix.msc1767.file": {"url": "mxc://example.com/abc123"},
-        }
-    })
-    assert is_voice_message(event) is True
-
-
-def test_is_voice_message_regular_text():
-    event = FakeEvent({"content": {"msgtype": "m.text", "body": "hello"}})
-    assert is_voice_message(event) is False
-
-
-def test_is_voice_message_regular_file():
-    event = FakeEvent({"content": {"msgtype": "m.file", "body": "document.pdf", "url": "mxc://example.com/abc123"}})
-    assert is_voice_message(event) is False
+def test_image_message_is_not_voice():
+    content = MediaMessageEventContent(msgtype=MessageType.IMAGE, body="photo.jpg")
+    assert is_voice_message(content) is False

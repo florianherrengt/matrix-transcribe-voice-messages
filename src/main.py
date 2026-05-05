@@ -1,13 +1,15 @@
 import asyncio
 import logging
 import signal
-import sys
 
 from dotenv import load_dotenv
-from nio import AsyncClient, AsyncClientConfig, InviteEvent, LoginResponse, RoomEncryptedAudio, RoomMessageAudio, RoomMessageText
+from mautrix.client import Client, InternalEventType
+from mautrix.crypto import OlmMachine
+from mautrix.crypto.store import PgCryptoStore, PgCryptoStateStore
+from mautrix.types import EventType, LoginType, MatrixUserIdentifier
+from mautrix.util.async_db import Database
 
 from src.config import Config
-from src.cross_sign import setup_cross_signing
 from src.matrix_client import MatrixTranscribeBot
 from src.transcriber import Transcriber
 
@@ -25,57 +27,61 @@ async def main():
     config = Config.from_env()
     transcriber = Transcriber(config.parakeet_url)
 
-    client = AsyncClient(
-        config.homeserver,
-        config.user_id,
-        store_path=config.store_path,
-        config=AsyncClientConfig(store_sync_tokens=True, encryption_enabled=True),
+    db = Database.create(
+        f"sqlite:{config.store_path}/crypto.db",
+        upgrade_table=PgCryptoStore.upgrade_table,
+    )
+    await db.start()
+    await PgCryptoStateStore.upgrade_table.upgrade(db)
+
+    crypto_store = PgCryptoStore(
+        account_id=config.user_id,
+        pickle_key=f"{config.user_id}:{config.device_id or 'default'}",
+        db=db,
+    )
+    await crypto_store.open()
+
+    state_store = PgCryptoStateStore(db)
+
+    client = Client(
+        base_url=config.homeserver,
+        mxid=config.user_id,
+        device_id=config.device_id,
+        sync_store=crypto_store,
+        state_store=state_store,
     )
 
-    if config.device_id:
-        client.device_id = config.device_id
-
-    resp = await client.login(config.password)
-    if not isinstance(resp, LoginResponse):
-        logger.error("Login failed: %s", resp)
-        sys.exit(1)
+    await client.login(
+        login_type=LoginType.PASSWORD,
+        identifier=MatrixUserIdentifier(user=config.user_id.split(":")[0][1:]),
+        password=config.password,
+        device_id=config.device_id,
+    )
 
     logger.info(
         "Logged in as %s (device_id=%s)",
         config.user_id,
         client.device_id,
     )
-    logger.info("Device key fingerprint: %s", client.olm.account.identity_keys["ed25519"])
 
-    bot = MatrixTranscribeBot(client, transcriber)
+    crypto = OlmMachine(client, crypto_store, state_store)
+    await crypto.load()
+    client.crypto = crypto
 
-    async def auto_join(room, event):
-        logger.info("Auto-joining room %s", room.room_id)
-        await client.join(room.room_id)
-
-    client.add_event_callback(auto_join, InviteEvent)
-    client.add_event_callback(bot.handle_room_message, (RoomMessageAudio, RoomMessageText, RoomEncryptedAudio))
-
-    await client.sync(timeout=30000, full_state=True)
-
-    await client.keys_upload()
-    logger.info("E2EE keys uploaded")
-
-    if client.should_query_keys:
-        await client.keys_query()
-        logger.info("E2EE keys queried")
+    await crypto.share_keys()
 
     if config.recovery_key:
         try:
-            await setup_cross_signing(client, config.recovery_key)
+            await crypto.verify_with_recovery_key(config.recovery_key)
+            logger.info("Cross-signing verified via recovery key")
         except Exception:
-            logger.exception("Cross-signing failed")
+            logger.exception("Cross-signing verification failed")
 
-    for user_id in client.device_store.users:
-        for device in client.device_store.active_user_devices(user_id):
-            if not device.verified:
-                client.verify_device(device)
-                logger.info("Trusted device %s for %s (startup)", device.id, user_id)
+    bot = MatrixTranscribeBot(client, transcriber)
+
+    @client.on(EventType.ROOM_MESSAGE)
+    async def on_message(evt):
+        await bot.handle_message(evt)
 
     stop_event = asyncio.Event()
 
@@ -88,15 +94,14 @@ async def main():
 
     logger.info("Bot started. Listening for voice messages...")
 
-    while not stop_event.is_set():
-        try:
-            await client.sync(timeout=30000)
-        except Exception:
-            logger.exception("Sync error")
-            await asyncio.sleep(5)
+    sync_task = asyncio.ensure_future(client.start(None))
+
+    await stop_event.wait()
+    client.stop()
 
     logger.info("Shutting down...")
-    await client.close()
+    await sync_task
+    await db.stop()
 
 
 if __name__ == "__main__":
